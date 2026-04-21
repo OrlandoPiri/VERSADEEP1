@@ -2,8 +2,13 @@ import { createAuthClient } from 'better-auth/svelte';
 import { phoneNumberClient } from 'better-auth/client/plugins';
 
 export const authClient = createAuthClient({
-  baseURL: 'http://localhost:5173', // Hardcoding stops env-variable lookup issues
-  plugins: [phoneNumberClient()],
+  // baseURL: 'http://localhost:5173', // Hardcoding stops env-variable lookup issues
+  // This automatically uses the correct URL based on where the app is running
+  baseURL:
+    typeof window !== 'undefined'
+      ? window.location.origin
+      : 'http://localhost:5173',
+  plugins: [phoneNumberClient()]
 });
 
 // import { createAuthClient } from 'better-auth/svelte';

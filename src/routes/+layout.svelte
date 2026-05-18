@@ -6,7 +6,7 @@
   import { goto } from '$app/navigation';
   import {
     Megaphone, Home, Search, Plus, Heart, User,
-    Menu, X, LayoutDashboard, LogOut, LogIn, UserPlus, Share2,
+    Menu, X, LayoutDashboard, LogOut, LogIn, UserPlus, Share2, Star, Sparkle, Radical, Bold
   } from 'lucide-svelte';
 
   // ── Props ──────────────────────────────────────────────────────────────────
@@ -78,11 +78,11 @@
       <!-- Logo -->
       <a href="/" class="flex items-center gap-2 transition-transform active:scale-95 shrink-0">
         <div class="rounded-xl bg-orange-600 p-1.5 md:p-2 text-white shadow-lg shadow-orange-200">
-          <Megaphone size={18} strokeWidth={2.5} class="md:hidden" />
-          <Megaphone size={22} strokeWidth={2.5} class="hidden md:block" />
+          <Radical size={18} strokeWidth={2.5} class="md:hidden" />
+          <Radical size={22} strokeWidth={3.5} class="hidden md:block" />
         </div>
         <span class="text-xl md:text-2xl font-black tracking-tighter text-gray-900">
-          VERSA<span class="text-orange-600">DEEP</span>
+          VERCENAS<span class="text-orange-600 text-3xl pl-0.5"> .</span>
         </span>
       </a>
 
@@ -204,7 +204,7 @@
           {#if user.role === 'admin'}
             <a href="/admin" onclick={closeMenu}
               class="flex items-center gap-3 px-3 py-3 rounded-xl font-bold text-sm text-gray-700 hover:bg-gray-50 transition-colors">
-              <LayoutDashboard size={18} class="shrink-0" /> Admin Dashboard
+              <LayoutDashboard size={18} class="shrink-0" /> Painel
             </a>
           {/if}
 
@@ -285,7 +285,11 @@
           <item.Icon size={22} strokeWidth={isActive(item.href) ? 2.5 : 1.8} class="relative" />
         </div>
         <span class="text-[10px] font-bold">{item.label}</span>
+
+
+   
       </a>
+
     {/each}
 
     <!-- Share button -->

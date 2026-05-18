@@ -4,7 +4,7 @@
   import { resolve } from '$app/paths';
 
   // --- Svelte 5 State ---
-  let method = $state<'email' | 'phone'>('email');
+  let method = $state<'email' | 'phone'>('phone');
   let name = $state('');
   let email = $state('');
   let phone = $state('');
@@ -57,8 +57,8 @@ if (error) {
   </div>
 
   <div class="mt-8 flex rounded-xl bg-gray-100 p-1">
-    <button onclick={() => method = 'email'} class="flex-1 rounded-lg py-2 text-xs font-bold uppercase tracking-wider transition-all {method === 'email' ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}">Email</button>
     <button onclick={() => method = 'phone'} class="flex-1 rounded-lg py-2 text-xs font-bold uppercase tracking-wider transition-all {method === 'phone' ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}">Telemóvel</button>
+    <button onclick={() => method = 'email'} class="flex-1 rounded-lg py-2 text-xs font-bold uppercase tracking-wider transition-all {method === 'email' ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}">Email</button>
   </div>
 
   <form onsubmit={(e) => { e.preventDefault(); handleSignup(); }} class="mt-6 space-y-4">

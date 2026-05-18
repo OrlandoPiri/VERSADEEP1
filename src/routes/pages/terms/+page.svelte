@@ -1,7 +1,7 @@
 <script lang="ts">
-  const LAST_UPDATED = '17 de Abril de 2026';
-  const COMPANY_NAME = 'VersaDeep';
-  const CONTACT_EMAIL = 'legal@versadeep.co.mz'; // replace with real email
+  const LAST_UPDATED = '17 de Maio de 2026';
+  const COMPANY_NAME = 'Vercenas'; // replace with real company name
+  const CONTACT_EMAIL = 'info@vercenas.com'; // replace with real email
   const JURISDICTION  = 'República de Moçambique';
 </script>
 

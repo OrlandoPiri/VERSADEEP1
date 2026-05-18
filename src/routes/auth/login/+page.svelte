@@ -4,7 +4,7 @@
   import { resolve } from '$app/paths';
 
   // --- Svelte 5 Runes ---
-  let method = $state<'email' | 'phone'>('email');
+  let method = $state<'email' | 'phone'>('phone');
   let identifier = $state(''); // Acts as both email OR phone
   let password = $state('');
   let loading = $state(false);
@@ -45,13 +45,13 @@
 
 <div class="mx-auto max-w-md px-6 py-24">
   <div class="text-center">
-    <h1 class="text-3xl font-black tracking-tight text-gray-900">Bem-vindo de volta</h1>
-    <p class="mt-2 text-sm font-medium text-gray-500">Entre para gerir as suas promoções.</p>
+    <h1 class="text-3xl font-black tracking-tight text-gray-900">Fazer Login</h1>
+    <p class="mt-2 text-sm font-medium text-gray-500">Entre para estar gerir as suas promoções em tempo real.</p>
   </div>
 
   <div class="mt-10 flex border-b border-gray-100 text-[11px] font-black uppercase tracking-[0.2em]">
-    <button onclick={() => method = 'email'} class="px-6 pb-3 transition-all {method === 'email' ? 'border-b-2 border-orange-600 text-orange-600' : 'text-gray-400'}">Email</button>
     <button onclick={() => method = 'phone'} class="px-6 pb-3 transition-all {method === 'phone' ? 'border-b-2 border-orange-600 text-orange-600' : 'text-gray-400'}">Telemóvel</button>
+    <button onclick={() => method = 'email'} class="px-6 pb-3 transition-all {method === 'email' ? 'border-b-2 border-orange-600 text-orange-600' : 'text-gray-400'}">Email</button>
   </div>
 
   <form onsubmit={(e) => { e.preventDefault(); handleLogin(); }} class="mt-8 space-y-5">

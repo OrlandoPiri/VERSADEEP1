@@ -14,6 +14,7 @@
    * Step 5 — Review + Submit
    */
   import { createPromotion, getUploadSignature } from '../../routes/promotions.remote';
+  import { CATEGORIES } from '$lib/utils/categories';
   import { fly, fade } from 'svelte/transition';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
@@ -68,6 +69,7 @@
     monday: '', tuesday: '', wednesday: '', thursday: '',
     friday: '', saturday: '', sunday: '',
   });
+  let category=$state('all');
 
   // ── Submit effect ──────────────────────────────────────────────────────────
   $effect(() => {
@@ -135,6 +137,10 @@
   }
 
   function removeImage(url: string) { imageUrls = imageUrls.filter((i) => i !== url); }
+
+  function makeCover(url: string) {
+  imageUrls = [url, ...imageUrls.filter((img) => img !== url)];
+}
 
   const PAYMENT_OPTIONS = ['CASH','M-PESA','E-MOLA','M-KESH','VISA','MASTERCARD','EFT','OTHER'];
 </script>
@@ -225,6 +231,7 @@
       <input type="hidden" name="imageUrls"          value={hiddenImageUrls} />
       <input type="hidden" name="paymentMethods"     value={hiddenPaymentMethods} />
       <input type="hidden" name="openHours"          value={hiddenOpenHours} />
+      <input type="hidden" name="category"           value={category} />
 
       <!-- ── STEP 1: Business Identity ──────────────────────────────────── -->
       {#if currentStep === 1}
@@ -308,6 +315,28 @@
               <span class="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-500 text-sm font-bold pointer-events-none">%</span>
             </div>
           </div>
+//Category
+
+<div class="space-y-1.5">
+  <label
+    class="text-[10px] text-gray-500 font-bold uppercase tracking-wider block"
+  >
+    Categoria <span class="text-[#8B5E3C]">*</span>
+  </label>
+
+  <select
+    bind:value={category}
+    class="w-full p-3 rounded-xl bg-[#1E293B] text-white text-sm outline-none border border-transparent focus:border-[#8B5E3C]"
+  >
+    <option value="all">Todas</option>
+
+    {#each CATEGORIES as cat (cat.slug)}
+      <option value={cat.slug}>
+        {cat.label}
+      </option>
+    {/each}
+  </select>
+</div>
           <div class="grid grid-cols-2 gap-3">
             <div class="space-y-1.5">
               <label for="start-date" class="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">
@@ -380,6 +409,19 @@
                            text-gray-300 hover:text-white hover:bg-red-900/80 hover:border-red-500
                            flex items-center justify-center transition-all opacity-0 group-hover:opacity-100 focus:opacity-100"
                     aria-label="Remover imagem {i + 1}"><X size={12} strokeWidth={3} /></button>
+
+                    <!-- MAKE COVER IMAGE -->
+                    {#if i !== 0}
+  <button
+    type="button"
+    onclick={() => makeCover(url)}
+    class="absolute bottom-1.5 left-1.5 px-2 py-1 rounded-md bg-black/70 border border-gray-700
+           text-white text-[9px] font-bold uppercase tracking-wide
+           hover:bg-black transition-all opacity-0 group-hover:opacity-100 focus:opacity-100"
+  >
+    Cover
+  </button>
+{/if}
                 </div>
               {/each}
             </div>

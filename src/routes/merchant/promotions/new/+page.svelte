@@ -12,7 +12,7 @@ $effect(() => {
  //if (!page.data.user || (page.data.user.role !== 'merchant' && page.data.user.role !== 'admin')) {
   //  goto('/auth/login');
  // } 
-});
+}); 
 
 </script>
 

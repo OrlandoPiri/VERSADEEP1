@@ -1,4 +1,4 @@
-import { query, form, prerender, getRequestEvent } from '$app/server';
+import { query, form, prerender, command, getRequestEvent } from '$app/server';
 import * as v from 'valibot';
 import { error } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
@@ -14,7 +14,13 @@ import {
   sql,
   count as drizzleCount
 } from 'drizzle-orm';
-import { promotions, likes, comments, merchants } from '$lib/server/db/schema';
+import {
+  promotions,
+  likes,
+  comments,
+  merchants,
+  businesses
+} from '$lib/server/db/schema';
 import { v2 as cloudinary } from 'cloudinary';
 import {
   CLOUDINARY_CLOUD_NAME,
@@ -42,8 +48,9 @@ const cursorSchema = v.object({
 });
 
 const createPromotionSchema = v.object({
-  merchantName: v.pipe(v.string(), v.nonEmpty('Nome do negócio é obrigatório')),
-  merchantLogoUrl: v.optional(v.string()),
+  // merchantName: v.pipe(v.string(), v.nonEmpty('Nome do negócio é obrigatório')),
+  // merchantLogoUrl: v.optional(v.string()),
+  businessId: v.optional(v.string()),
   title: v.pipe(v.string(), v.nonEmpty()),
   description: v.optional(v.string()),
   discountPercentage: v.optional(v.string()),
@@ -78,6 +85,25 @@ const searchSchema = v.object({
   offset: v.optional(v.number())
 });
 
+// --- SHARED HELPERS added in the night 27to28/July/26---
+ 
+/**
+ * Numeric ID coming from a <form> submission.
+ *
+ * FormData always serializes values as strings — even a hidden
+ * <input value={someNumber}> arrives server-side as "42", never 42.
+ * v.number() does NOT coerce, it only checks typeof === 'number', so it
+ * rejects that string outright and validation fails *before* the form
+ * handler ever runs. Any `form()` (not `query()`) that needs an id must
+ * use this instead of a bare v.number().
+ *
+ * query()/query.batch() are unaffected — those are called directly from
+ * code with real JS values (e.g. getPromotionById(42)), not parsed from
+ * FormData, so v.number() there is correct as-is.
+ */
+const numericId = (message = 'ID inválido') =>
+  v.pipe(v.string(), v.nonEmpty(message), v.transform(Number), v.finite(message));
+
 // --- UPLOAD SIGNATURE ---
 export const getUploadSignature = query(
   v.object({ folder: v.optional(v.string(), 'promotions') }),
@@ -111,6 +137,11 @@ export const getPromoStats = prerender(async () => {
 });
 
 // Shared column selection — keeps getPromotions and searchPromotions in sync
+//
+// NOTE: `category` was previously missing from this list entirely, which
+// meant p.category was always undefined client-side regardless of what was
+// stored in the DB — the Edit page had no way to even know a promotion's
+// current category, let alone preserve it. Added below.
 const promotionColumns = {
   id: promotions.id,
   merchantId: promotions.merchantId,
@@ -119,6 +150,7 @@ const promotionColumns = {
   description: promotions.description,
   discountPercentage: promotions.discountPercentage,
   city: promotions.city,
+  category: promotions.category,
   tags: promotions.tags,
   startDate: promotions.startDate,
   endDate: promotions.endDate,
@@ -136,8 +168,11 @@ const promotionColumns = {
   authorRole: promotions.authorRole,
   createdAt: promotions.createdAt,
   updatedAt: promotions.updatedAt,
-  merchantName: merchants.businessName,
-  merchantLogo: merchants.logo
+  // merchantName: merchants.businessName,
+  // merchantLogo: merchants.logo
+  businessId: promotions.businessId,
+  businessName: businesses.name,
+  businessLogo: businesses.logoUrl
 };
 
 /**
@@ -149,13 +184,14 @@ export const getPromotions = query(v.optional(cursorSchema), async (cursor) => {
     .select(promotionColumns)
     .from(promotions)
     .leftJoin(merchants, eq(merchants.id, promotions.merchantId))
+    .leftJoin(businesses, eq(businesses.id, promotions.businessId))
     .where(eq(promotions.status, 'active'))
     .$dynamic();
 
   if (cursor) {
-    const { featured, verified, endDate, createdAt, id } = cursor;
+    const { featured, verified, createdAt, endDate, id } = cursor;
     baseQuery = baseQuery.where(
-      sql`(featured, verified, end_date, created_at, id) > (
+      sql`(featured, verified, created_at, end_date, id) > (
         ${featured},
         ${verified},
         ${endDate}::timestamp,
@@ -169,11 +205,11 @@ export const getPromotions = query(v.optional(cursorSchema), async (cursor) => {
     .orderBy(
       desc(promotions.featured),
       desc(promotions.verified),
-      asc(promotions.endDate),
       desc(promotions.createdAt),
+      asc(promotions.endDate),
       desc(promotions.id)
     )
-    .limit(20);
+    .limit(30);
 
   return {
     items,
@@ -293,8 +329,8 @@ export const searchPromotions = query(searchSchema, async (input) => {
           desc(promotions.featured),
           desc(promotions.sponsored),
           desc(promotions.verified),
+          desc(promotions.createdAt),
           desc(promotions.discountPercentage),
-          desc(promotions.createdAt)
         ];
     }
   })();
@@ -303,6 +339,7 @@ export const searchPromotions = query(searchSchema, async (input) => {
     .select(promotionColumns)
     .from(promotions)
     .leftJoin(merchants, eq(merchants.id, promotions.merchantId))
+    .leftJoin(businesses, eq(businesses.id, promotions.businessId))
     .where(and(...conditions))
     .orderBy(...orderBy)
     .limit(limit)
@@ -312,6 +349,8 @@ export const searchPromotions = query(searchSchema, async (input) => {
     .select({ total: drizzleCount() })
     .from(promotions)
     .leftJoin(merchants, eq(merchants.id, promotions.merchantId))
+    .leftJoin(businesses, eq(businesses.id, promotions.businessId))
+
     .where(and(...conditions));
 
   return { items, total: Number(total), offset, limit };
@@ -322,125 +361,253 @@ export const getPromotionById = query(v.number(), async (id) => {
     .select(promotionColumns)
     .from(promotions)
     .leftJoin(merchants, eq(merchants.id, promotions.merchantId))
+    .leftJoin(businesses, eq(businesses.id, promotions.businessId))
     .where(eq(promotions.id, id))
     .limit(1);
   if (!row) error(404, 'Promotion not found');
+  console.log('PROMOTION ROW', row);
   return row;
 });
 
 export const getPromotionsByIds = query.batch(v.number(), async (ids) => {
   const items = await db
-    .select()
+    .select(promotionColumns)
     .from(promotions)
+    .leftJoin(merchants, eq(merchants.id, promotions.merchantId))
+    .leftJoin(businesses, eq(businesses.id, promotions.businessId))
     .where(sql`id = ANY(${ids})`);
   const lookup = new Map(items.map((p) => [p.id, p]));
   return (id: number) => lookup.get(id);
 });
 
+// Remote query to fetch all businesses for the logged-in merchant
+// ─────────────────────────────────────────────
+// BUSINESSES
+// ─────────────────────────────────────────────
+
+export const getMerchantBusinesses = query(async () => {
+  const event = getRequestEvent();
+
+  const user = event.locals.user;
+
+  if (!user) {
+    return [];
+  }
+
+  const [merchant] = await db
+    .select()
+    .from(merchants)
+    .where(eq(merchants.userId, user.id))
+    .limit(1);
+
+  if (!merchant) {
+    return [];
+  }
+
+  return await db
+    .select()
+    .from(businesses)
+    .where(eq(businesses.merchantId, merchant.id))
+    .orderBy(desc(businesses.id));
+});
+
 // --- ACTIONS ---
+// Remote command to create a new business (store) for the logged-in merchant
+
+export const createBusiness = command(
+  v.object({
+    name: v.pipe(v.string(), v.nonEmpty()),
+    logoUrl: v.optional(v.string()),
+    address: v.optional(v.string()),
+    phone: v.optional(v.string()),
+    whatsapp: v.optional(v.string()),
+    email: v.optional(v.string())
+  }),
+
+  async (data) => {
+    const event = getRequestEvent();
+
+    const user = event.locals.user;
+
+    if (!user) {
+      error(401, 'Não autenticado');
+    }
+
+    let [merchant] = await db
+      .select()
+      .from(merchants)
+      .where(eq(merchants.userId, user.id))
+      .limit(1);
+
+    // Auto-create merchant row if normal user
+    if (!merchant) {
+      const [createdMerchant] = await db
+        .insert(merchants)
+        .values({
+          userId: user.id,
+          businessName: data.name,
+          logo: data.logoUrl || null,
+          verified: false
+        })
+        .returning();
+
+      merchant = createdMerchant;
+    }
+
+    const [business] = await db
+      .insert(businesses)
+      .values({
+        merchantId: merchant.id,
+        name: data.name,
+        logoUrl: data.logoUrl || null,
+        address: data.address || null,
+        phone: data.phone || null,
+        whatsapp: data.whatsapp || null,
+        email: data.email || null
+      })
+      .returning();
+
+    return business;
+  }
+);
 
 export const createPromotion = form(createPromotionSchema, async (data) => {
   const event = getRequestEvent();
+
   const user = event?.locals?.user;
-  if (!user) error(401, 'Não autenticado');
+
+  if (!user) {
+    error(401, 'Não autenticado');
+  }
+
+  // ─────────────────────────────────────────────
+  // Merchant account
+  // ─────────────────────────────────────────────
+
+  const [merchant] = await db
+    .select()
+    .from(merchants)
+    .where(eq(merchants.userId, user.id))
+    .limit(1);
+
+  if (!merchant) {
+    error(403, 'Conta do comerciante não encontrada');
+  }
+
+  // ─────────────────────────────────────────────
+  // Business validation
+  // ─────────────────────────────────────────────
+
+  const businessId = Number(data.businessId);
+
+  if (!businessId || isNaN(businessId)) {
+    error(400, 'Business inválido');
+  }
+
+  const [business] = await db
+    .select()
+    .from(businesses)
+    .where(
+      and(eq(businesses.id, businessId), eq(businesses.merchantId, merchant.id))
+    )
+    .limit(1);
+
+  if (!business) {
+    error(403, 'Business não encontrado');
+  }
+
+  // ─────────────────────────────────────────────
+  // Transform fields
+  // ─────────────────────────────────────────────
 
   const finalPaymentMethods = data.paymentMethods
     ? data.paymentMethods.split(',').filter(Boolean)
     : [];
+
   const finalImageUrls = data.imageUrls
     ? data.imageUrls.split(',').filter(Boolean)
     : [];
+
   const finalOpenHours = data.openHours ? JSON.parse(data.openHours) : null;
+
   const finalTags = data.tags
     ? data.tags
         .split(',')
         .map((t) => t.trim())
         .filter(Boolean)
     : [];
+
   const city = normalizeCity(data.locationAddress || '');
+
   const isTrusted = user.role === 'merchant' || user.role === 'admin';
-  //Right after this block:
+
   const rawCategory = data.category as string;
+
   const category = rawCategory && rawCategory !== 'all' ? rawCategory : 'other';
 
-  let mId: number;
+  // ─────────────────────────────────────────────
+  // Insert promotion
+  // ─────────────────────────────────────────────
 
-  if (user.role === 'admin' && data.merchantId) {
-    mId = Number(data.merchantId);
-    if (isNaN(mId)) error(400, 'merchantId inválido');
-    await db
-      .update(merchants)
-      .set({
-        businessName: data.merchantName,
-        ...(data.merchantLogoUrl ? { logo: data.merchantLogoUrl } : {}),
-        updatedAt: new Date()
-      })
-      .where(eq(merchants.id, mId));
-  } else {
-    const [existing] = await db
-      .select()
-      .from(merchants)
-      .where(eq(merchants.userId, user.id))
-      .limit(1);
-
-    if (existing) {
-      await db
-        .update(merchants)
-        .set({
-          businessName: data.merchantName,
-          ...(data.merchantLogoUrl ? { logo: data.merchantLogoUrl } : {}),
-          updatedAt: new Date()
-        })
-        .where(eq(merchants.id, existing.id));
-      mId = existing.id;
-    } else {
-      const [created] = await db
-        .insert(merchants)
-        .values({
-          userId: user.id,
-          businessName: data.merchantName,
-          logo: data.merchantLogoUrl || null,
-          verified: false
-        })
-        .returning();
-      mId = created.id;
-    }
-  }
-
-  // Insert without slug first — we need the id to make the slug unique
   const [promo] = await db
     .insert(promotions)
     .values({
       title: data.title,
+
       description: data.description,
+
       discountPercentage: data.discountPercentage
         ? Number(data.discountPercentage)
         : null,
+
       tags: finalTags,
+
       city,
-      // ✅ FIXED: ensure every promotion has a category — use 'other' if not specified
+
       category,
+
       startDate: new Date(data.startDate),
+
       endDate: new Date(data.endDate),
+
       openHours: finalOpenHours,
-      location: { address: data.locationAddress || '', lat: 0, lng: 0 },
+
+      location: {
+        address: data.locationAddress || '',
+        lat: 0,
+        lng: 0
+      },
+
       contact: {
         phone: data.contactPhone,
         whatsapp: data.contactWhatsapp,
         email: data.contactEmail
       },
+
       imageUrls: finalImageUrls,
+
       paymentMethods: finalPaymentMethods,
+
       terms: data.terms,
-      merchantId: mId,
+
+      merchantId: merchant.id,
+
+      businessId: business.id,
+
       status: 'active',
+
       verified: isTrusted,
+
       authorRole: user.role === 'admin' ? 'merchant' : user.role
     } as any)
     .returning();
 
-  // Set slug using the auto-generated id — guaranteed unique without retries
-  const slug = generateSlug(data.title, data.merchantName, promo.id);
+  // ─────────────────────────────────────────────
+  // Slug
+  // ─────────────────────────────────────────────
+
+  const slug = generateSlug(data.title, business.name, promo.id);
+
   const [withSlug] = await db
     .update(promotions)
     .set({ slug })
@@ -449,9 +616,153 @@ export const createPromotion = form(createPromotionSchema, async (data) => {
 
   return withSlug;
 });
+// export const createPromotion = form(createPromotionSchema, async (data) => {
+//   const event = getRequestEvent();
+//   const user = event?.locals?.user;
+//   if (!user) error(401, 'Não autenticado');
+
+//   const finalPaymentMethods = data.paymentMethods
+//     ? data.paymentMethods.split(',').filter(Boolean)
+//     : [];
+//   const finalImageUrls = data.imageUrls
+//     ? data.imageUrls.split(',').filter(Boolean)
+//     : [];
+//   const finalOpenHours = data.openHours ? JSON.parse(data.openHours) : null;
+//   const finalTags = data.tags
+//     ? data.tags
+//         .split(',')
+//         .map((t) => t.trim())
+//         .filter(Boolean)
+//     : [];
+//   const city = normalizeCity(data.locationAddress || '');
+//   const isTrusted = user.role === 'merchant' || user.role === 'admin';
+//   //Right after this block:
+//   const rawCategory = data.category as string;
+//   const category = rawCategory && rawCategory !== 'all' ? rawCategory : 'other';
+
+//   // let mId: number;
+// let businessId = Number(data.businessId);
+
+// if (isNaN(businessId)) {
+//   error(400, 'Business inválido');
+// }
+
+// const [business] = await db
+//   .select()
+//   .from(businesses)
+//   .where(eq(businesses.id, businessId))
+//   .limit(1);
+
+// if (!business) {
+//   error(404, 'Business não encontrado');
+// }
+
+// const [merchant] = await db
+//   .select()
+//   .from(merchants)
+//   .where(eq(merchants.userId, user.id))
+//   .limit(1);
+
+// if (!merchant) {
+//   error(403, 'Merchant account not found');
+// }
+
+// if (business.merchantId !== merchant.id) {
+//   error(403, 'Business não pertence ao utilizador');
+// }
+
+// const mId = merchant.id;
+//   // Insert without slug first — we need the id to make the slug unique
+
+//   // Find merchant account
+//   const [merchant] = await db
+//     .select()
+//     .from(merchants)
+//     .where(eq(merchants.userId, user.id))
+//     .limit(1);
+
+//   if (!merchant) {
+//     error(403, 'Merchant account not found');
+//   }
+
+//   merchantId = merchant.id;
+
+//   // Resolve selected business
+//   if (data.businessId) {
+//     businessId = Number(data.businessId);
+
+//     const [business] = await db
+//       .select()
+//       .from(businesses)
+//       .where(
+//         and(
+//           eq(businesses.id, businessId),
+//           eq(businesses.merchantId, merchant.id)
+//         )
+//       )
+//       .limit(1);
+
+//     if (!business) {
+//       error(403, 'Business not found');
+//     }
+//   } else {
+//     Auto-create first business if none selected
+//     const [createdBusiness] = await db
+//       .insert(businesses)
+//       .values({
+//         merchantId: merchant.id,
+//         name: data.merchantName,
+//         logoUrl: data.merchantLogoUrl || null
+//       })
+//       .returning();
+
+//     businessId = createdBusiness.id;
+//   }
+
+//   const [promo] = await db
+//     .insert(promotions)
+//     .values({
+//       title: data.title,
+//       description: data.description,
+//       discountPercentage: data.discountPercentage
+//         ? Number(data.discountPercentage)
+//         : null,
+//       tags: finalTags,
+//       city,
+//       // ✅ FIXED: ensure every promotion has a category — use 'other' if not specified
+//       category,
+//       startDate: new Date(data.startDate),
+//       endDate: new Date(data.endDate),
+//       openHours: finalOpenHours,
+//       location: { address: data.locationAddress || '', lat: 0, lng: 0 },
+//       contact: {
+//         phone: data.contactPhone,
+//         whatsapp: data.contactWhatsapp,
+//         email: data.contactEmail
+//       },
+//       imageUrls: finalImageUrls,
+//       paymentMethods: finalPaymentMethods,
+//       terms: data.terms,
+//       merchantId: mId,businessId,
+//       status: 'active',
+//       verified: isTrusted,
+//       authorRole: user.role === 'admin' ? 'merchant' : user.role
+//     } as any)
+//     .returning();
+
+//   // Set slug using the auto-generated id — guaranteed unique without retries
+//   const slug = generateSlug(data.title, business.name, promo.id);
+//   const [withSlug] = await db
+//     .update(promotions)
+//     .set({ slug })
+//     .where(eq(promotions.id, promo.id))
+//     .returning();
+
+//   return withSlug;
+// };
 
 export const updatePromotion = form(
-  v.object({ id: v.number(), ...createPromotionSchema.entries }),
+  v.object({ id: numericId(), ...createPromotionSchema.entries }),
   async (data) => {
     const event = getRequestEvent();
     const user = event?.locals?.user;
@@ -487,14 +798,34 @@ export const updatePromotion = form(
           .map((t) => t.trim())
           .filter(Boolean)
       : ((existing.tags as string[]) ?? []);
+    // category: same fallback pattern as tags/paymentMethods/imageUrls below —
+    // if the form sent a real category, use it; otherwise keep whatever the
+    // promotion already had. Previously this key didn't exist in the SET
+    // clause at all, so category could never be persisted through an edit.
+    const rawCategory = data.category as string | undefined;
+    const finalCategory =
+      rawCategory && rawCategory !== 'all' ? rawCategory : existing.category;
 
     // Regenerate slug only if title changed
-    const merchantName = data.merchantName || '';
+    // const merchantName = data.merchantName || '';
+    // const newSlug = existing.slug
+    //   ? data.title !== existing.title
+    //     ? generateSlug(data.title, merchantName, data.id)
+    //     : existing.slug
+    //   : generateSlug(data.title, merchantName, data.id);
+    const [business] = await db
+      .select()
+      .from(businesses)
+      .where(eq(businesses.id, existing.businessId!))
+      .limit(1);
+
+    const businessName = business?.name || 'business';
+
     const newSlug = existing.slug
       ? data.title !== existing.title
-        ? generateSlug(data.title, merchantName, data.id)
+        ? generateSlug(data.title, businessName, data.id)
         : existing.slug
-      : generateSlug(data.title, merchantName, data.id);
+      : generateSlug(data.title, businessName, data.id);
 
     try {
       const [updated] = await db
@@ -539,20 +870,58 @@ export const updatePromotion = form(
   }
 );
 
-export const deletePromotion = form(
+// export const deletePromotion = form(
+//   v.object({ id: numericId() }),
+//   async ({ id }) => {
+//     const event = getRequestEvent();
+//     const user = event?.locals?.user;
+//     if (!user) error(401);
+
+//     const [existing] = await db
+//       .select()
+//       .from(promotions)
+//       .where(eq(promotions.id, id))
+//       .limit(1);
+//     if (!existing) error(404);
+
+//     if (user.role !== 'admin') {
+//       const [merchantRow] = await db
+//         .select()
+//         .from(merchants)
+//         .where(
+//           and(
+//             eq(merchants.id, existing.merchantId),
+//             eq(merchants.userId, user.id)
+//           )
+//         )
+//         .limit(1);
+//       if (!merchantRow) error(403, 'Sem permissão');
+//     }
+
+//     await db.delete(promotions).where(eq(promotions.id, id));
+//     return { success: true };
+//   }
+// );
+
+
+// command(), not form(): this is called imperatively from a button handler
+// (after a confirm() dialog), not by spreading onto a <form>. Commands take
+// real JSON-typed arguments, so v.number() is correct here — numericId()
+// is only for values arriving as FormData strings.
+export const deletePromotion = command(
   v.object({ id: v.number() }),
   async ({ id }) => {
     const event = getRequestEvent();
     const user = event?.locals?.user;
     if (!user) error(401);
-
+ 
     const [existing] = await db
       .select()
       .from(promotions)
       .where(eq(promotions.id, id))
       .limit(1);
     if (!existing) error(404);
-
+ 
     if (user.role !== 'admin') {
       const [merchantRow] = await db
         .select()
@@ -566,17 +935,21 @@ export const deletePromotion = form(
         .limit(1);
       if (!merchantRow) error(403, 'Sem permissão');
     }
-
+ 
+    // Remove dependent rows first. Harmless if the FKs already cascade; if
+    // they don't, deleting the promotion alone would fail with a FK error.
+    // await db.delete(likes).where(eq(likes.promotionId, id)); Already cascading in the schema, but leaving this here in case we ever change that.
+    // await db.delete(comments).where(eq(comments.promotionId, id)); Also already cascading.
     await db.delete(promotions).where(eq(promotions.id, id));
     return { success: true };
   }
 );
 
-export const toggleLike = form(
+export const toggleLike = command(
   v.object({ promotionId: v.number() }),
   async ({ promotionId }) => {
     const user = getRequestEvent()?.locals?.user;
-    if (!user) error(401);
+    if (!user) error(401, 'Inicie sessão para guardar promoções.');
 
     const [existing] = await db
       .select()
@@ -589,14 +962,27 @@ export const toggleLike = form(
       return { liked: false };
     }
 
-    await db.insert(likes).values({ userId: user.id, promotionId });
+    await db
+      .insert(likes)
+      .values({ userId: user.id, promotionId })
+      .onConflictDoNothing();
     return { liked: true };
   }
 );
 
+export const getMyLikedIds = query(async () => {
+  const user = getRequestEvent()?.locals?.user;
+  if (!user) return [] as number[];
+  const rows = await db
+    .select({ id: likes.promotionId })
+    .from(likes)
+    .where(eq(likes.userId, user.id));
+  return rows.map((r) => r.id);
+});
+
 export const addComment = form(
   v.object({
-    promotionId: v.number(),
+    promotionId: numericId(),
     content: v.pipe(v.string(), v.nonEmpty())
   }),
   async ({ promotionId, content }) => {
@@ -611,6 +997,7 @@ export const addComment = form(
     return comment;
   }
 );
+
 //After Netlify deployment - Before Search/Filter/Sort
 // import { query, form, prerender, getRequestEvent } from '$app/server';
 // import * as v from 'valibot';

@@ -34,7 +34,7 @@
   async function handleLogout() {
     closeMenu();
     await authClient.signOut();
-    window.location.href = '/auth/login';
+    window.location.href = '/login';
   }
 
   // ── Share ──────────────────────────────────────────────────────────────────
@@ -64,7 +64,7 @@
     {#if stats.current}
       <span class="inline-flex items-center gap-2">
         <span class="h-1.5 w-1.5 rounded-full bg-white animate-pulse"></span>
-        {stats.current.totalActive} Promoções ativas em Moçambique
+        {stats.current.totalActive} Promoções activas em Moçambique
       </span>
     {:else}
       <span>Explorar as melhores ofertas de Moçambique</span>
@@ -81,7 +81,7 @@
           <Radical size={18} strokeWidth={2.5} class="md:hidden" />
           <Radical size={22} strokeWidth={3.5} class="hidden md:block" />
         </div>
-        <span class="text-xl md:text-2xl font-black tracking-tighter text-gray-900">
+        <span class=" text-xl md:text-2xl font-black tracking-tighter text-gray-900">
           VERCENAS<span class="text-orange-600 text-3xl pl-0.5"> .</span>
         </span>
       </a>
@@ -89,8 +89,8 @@
       <!-- Desktop nav (hidden on mobile) -->
       <nav class="hidden md:flex items-center gap-10 text-[13px] font-bold uppercase tracking-wider text-gray-500">
         <a href="/"                        class="hover:text-orange-600 transition-colors {isActive('/') ? 'text-orange-600' : ''}">Promoções</a>
-        <a href="/merchant/dashboard"      class="hover:text-orange-600 transition-colors {isActive('/merchant/dashboard') ? 'text-orange-600' : ''}">Lojas</a>
-        <a href="/merchant/promotions/new" class="hover:text-orange-600 transition-colors">+Criar Promoção</a>
+        <a href="/merchant/dashboard"      class="hover:text-orange-600 transition-colors {isActive('/merchant/dashboard') ? 'text-orange-600' : ''}">Meus Anúncios</a>
+        <a href="/merchant/promotions/new" class="hover:text-orange-600 transition-colors {isActive('/merchant/promotions/new') ? 'text-orange-600' : ''}">+Criar Promoção</a>
       </nav>
 
       <!-- Right side -->
@@ -120,8 +120,8 @@
               <LogOut size={16} /> Sair
             </button>
           {:else}
-            <a href="/auth/login"  class="px-4 py-2 text-sm font-bold text-gray-600 hover:text-orange-600">Entrar</a>
-            <a href="/auth/signup" class="rounded-full bg-orange-100 px-6 py-2.5 text-sm font-bold text-orange-600 hover:bg-orange-600 hover:text-white transition-all">Registar</a>
+            <a href="/login"  class="px-4 py-2 text-sm font-bold text-gray-600 hover:text-orange-600">Entrar</a>
+            <a href="/signup" class="rounded-full bg-orange-100 px-6 py-2.5 text-sm font-bold text-orange-600 hover:bg-orange-600 hover:text-white transition-all">Registar</a>
           {/if}
         </div>
 
@@ -169,9 +169,9 @@
     <!-- Drawer -->
     <div class="fixed top-0 right-0 bottom-0 z-50 w-72 bg-white shadow-2xl flex flex-col md:hidden">
 
-      <!-- Drawer header -->
+      <!-- Drawer header AKA Sidebar only on mobile -->
       <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-        <span class="font-black text-lg tracking-tighter">VERSA<span class="text-orange-600">DEEP</span></span>
+        <span class="font-black text-lg tracking-tighter">VERCENAS<span class="text-orange-600 text-3xl pl-0.5">.</span></span>
         <button type="button" onclick={closeMenu} aria-label="Fechar" class="p-2 rounded-xl text-gray-500 hover:bg-gray-100 transition-colors">
           <X size={18} />
         </button>
@@ -182,7 +182,7 @@
         <p class="text-[10px] font-black uppercase tracking-widest text-gray-400 px-2 mb-1">Navegar</p>
         {#each [
           { href: '/',                          label: 'Promoções',       Icon: Home     },
-          { href: '/merchant/dashboard',        label: 'Lojas',           Icon: Megaphone },
+          { href: '/merchant/dashboard',        label: 'Meus Anúncios',           Icon: Megaphone },
           { href: '/merchant/promotions/new',   label: 'Criar Promoção',  Icon: Plus     },
           { href: '/search',                    label: 'Pesquisar',       Icon: Search   },
         ] as item}
@@ -225,11 +225,11 @@
           </button>
 
         {:else}
-          <a href="/auth/login" onclick={closeMenu}
+          <a href="/login" onclick={closeMenu}
             class="flex items-center gap-3 px-3 py-3 rounded-xl font-bold text-sm text-gray-700 hover:bg-gray-50 transition-colors">
             <LogIn size={18} class="shrink-0" /> Entrar
           </a>
-          <a href="/auth/signup" onclick={closeMenu}
+          <a href="/signup" onclick={closeMenu}
             class="flex items-center gap-3 px-3 py-3 rounded-xl font-bold text-sm bg-orange-600 text-white hover:bg-orange-700 transition-colors mt-2">
             <UserPlus size={18} class="shrink-0" /> Registar
           </a>
@@ -297,7 +297,7 @@
       type="button"
       onclick={handleShare}
       aria-label="Partilhar"
-      class="flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-colors text-gray-400 hover:text-gray-700"
+      class="flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-colors text-gray-400 hover:text-gray-700 "
     >
       <div class="flex items-center justify-center">
         <Share2 size={22} strokeWidth={1.8} />
@@ -319,7 +319,7 @@
         {/if}
         <!-- Show avatar initial if logged in, user icon otherwise -->
         {#if user?.id}
-          <div class="relative w-[22px] h-[22px] rounded-full bg-orange-600 flex items-center justify-center">
+          <div class="relative w-5.5 h-5.5 rounded-full bg-orange-600 flex items-center justify-center">
             <span class="text-[10px] font-black text-white leading-none">
               {(user.name || user.email || '?').charAt(0).toUpperCase()}
             </span>
@@ -337,14 +337,14 @@
   <footer class="hidden md:block border-t border-gray-100 bg-white py-12">
     <div class="mx-auto max-w-7xl px-6 flex flex-col md:flex-row justify-between items-center gap-6">
       <div class="flex flex-col items-center md:items-start gap-2">
-        <span class="text-lg font-black tracking-tighter">VERSA<span class="text-orange-600">DEEP</span></span>
-        <p class="text-xs text-gray-400 font-medium">© 2026 Feito com ❤️ em Moçambique.</p>
+        <span class="text-lg font-black tracking-tighter">VERCENAS<span class="text-orange-600 text-3xl pl-0.5">.</span></span>
+        <p class="text-xs text-gray-400 font-medium">© 2026 Todos os direitos reservados.</p>
       </div>
       <div class="flex gap-8 text-[11px] font-bold uppercase tracking-widest text-gray-400">
-        <a href="/pages/about" class="hover:text-orange-600">Sobre Nós</a>
-        <a href="/pages/terms"   class="hover:text-orange-600">Termos</a>
-        <a href="/pages/privacy" class="hover:text-orange-600">Privacidade</a>
-        <a href="/pages/contact" class="hover:text-orange-600">Suporte</a>
+        <a href="/pages/about" class="hover:text-orange-600 {isActive('/pages/about') ? 'text-orange-600' : ''}" >Sobre Nós</a>
+        <a href="/pages/terms"   class="hover:text-orange-600 {isActive('/pages/terms') ? 'text-orange-600' : ''}">Termos</a>
+        <a href="/pages/privacy" class="hover:text-orange-600 {isActive('/pages/privacy') ? 'text-orange-600' : ''}">Privacidade</a>
+        <a href="/pages/contact" class="hover:text-orange-600 {isActive('/pages/contact') ? 'text-orange-600' : ''}">Suporte</a>
       </div>
     </div>
   </footer>

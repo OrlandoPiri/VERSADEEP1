@@ -67,7 +67,7 @@
   let searchTotal   = $state(0);
   let searchLoading = $state(false);
   let searchOffset  = $state(0);
-  const LIMIT       = 20;
+  const LIMIT       = 30;
   const hasMore     = $derived(searchItems.length < searchTotal);
 
   async function runSearch(append = false) {
@@ -168,10 +168,10 @@ function toggleSearch() {
   {#if !isSearchMode && !searchQuery}
     <section class="text-center py-12 bg-linear-to-b from-orange-50 to-white rounded-3xl mx-0 mt-0">
       <h1 class="text-4xl font-black tracking-tighter sm:text-6xl mb-4">
-        Ofertas Frescas <span class="text-orange-600">Hoje</span>
+        Promoções Directas <span class="text-orange-600">Hoje</span>
       </h1>
       <p class="text-gray-500 max-w-xl mx-auto">
-        As melhores promoções de Maputo a Pemba, actualizadas em tempo real.
+        As melhores promoções de Maputo a Pemba, actualizadas em tempo real.  <a href="/signup" class="font-black tracking-tighter underline hover:text-orange-700">Cadastre-se Já!</a> 
       </p>
       <button onclick={toggleSearch} aria-expanded={isSearchOpen} class=" text-orange-500  onhover:text-orange-900 text-l transition-colors mt-6 inline-flex items-center gap-2 font-bold cursor-pointer">
         {#if isSearchOpen}
@@ -397,19 +397,18 @@ function toggleSearch() {
       {#if promos.loading && !promos.ready}
         <div class="flex flex-col items-center justify-center py-20">
           <Loader2 class="animate-spin text-orange-600 mb-4" size={40} />
-          <p class="text-sm font-medium text-gray-400">Buscando as melhores ofertas…</p>
+          <p class="text-sm font-medium text-gray-400">Buscando as melhores promoções…</p>
         </div>
 
       {:else if promos.error}
         <div class="bg-red-50 border border-red-100 rounded-2xl p-8 text-center">
-          <p class="text-red-600 font-bold">Erro ao carregar promoções.</p>
+          <p class="text-red-600 font-bold">Erro ao carregar promoções. Verifique se a internet está activa?</p>
           <button onclick={() => location.reload()} class="mt-2 text-sm underline">Tentar de novo</button>
         </div>
 
       {:else if promos.ready}
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
 
-        <!-- <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"> -->
           {#each promos.current.items as promo}
             <PromotionCard {promo} />
           {/each}

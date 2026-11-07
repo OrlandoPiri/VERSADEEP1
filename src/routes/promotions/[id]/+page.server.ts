@@ -1,10 +1,11 @@
 // src/routes/promotions/[id]/+page.server.ts
 import { getPromotionById } from '../../promotions.remote';
-import { error } from '@sveltejs/kit';
+import { error, redirect } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { eq } from 'drizzle-orm';
 import { merchants } from '$lib/server/db/schema';
 import type { PageServerLoad } from './$types';
+
 
 export const load: PageServerLoad = async ({ params, locals }) => {
   const id = Number(params.id);
@@ -14,7 +15,12 @@ export const load: PageServerLoad = async ({ params, locals }) => {
   if (!promotion) throw error(404, 'Esta promoção já não está disponível.');
 
   const user = locals.user;
+
+  if (!user) {
+    throw redirect(302, '/login');
+  }
   let canEdit = false;
+  
 
   if (user) {
     if (user.role === 'admin') {

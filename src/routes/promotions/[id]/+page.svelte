@@ -4,8 +4,10 @@
   import MapPreview from '$lib/components/MapPreview2.svelte';
   import ImageGallery from '$lib/components/ImageGallery.svelte';
   import { galleryImage, placeholderImage, thumbImage, logoImage } from '$lib/utils/cloudinary';
+import LikeButton from '$lib/components/LikeButton.svelte';
 
-  let { data } = $props<{ data: PageData }>();
+
+  let { data }: { data: PageData } = $props();
   const promotion = $derived(data.promotion);
   const canEdit   = $derived(data.canEdit);   // ← from +page.server.ts, no client guessing
   const images    = $derived(promotion.imageUrls?.filter(Boolean) ?? []);
@@ -42,22 +44,34 @@
     : []
   );
 
+  // const merchantInitial = $derived(
+  //   promotion.merchantName?.trim().charAt(0).toUpperCase() ?? '?'
+  // );
   const merchantInitial = $derived(
-    promotion.merchantName?.trim().charAt(0).toUpperCase() ?? '?'
+    promotion.businessName?.trim().charAt(0).toUpperCase() ?? '?'
   );
+
+
+  // console.log('DETAIL PROMOTION', promotion);
 </script>
 
 <svelte:head>
-  <title>{promotion.title} - Versa</title>
+  <title>{promotion.title} - Vercenas</title>
 </svelte:head>
+
 
 {#if galleryOpen && images.length}
   <ImageGallery
     {images}
     startIndex={activeIdx}
     onclose={() => (galleryOpen = false)}
-  />
+  >
+    {#snippet actions()}
+      <LikeButton promotionId={promotion.id} variant="round" />
+    {/snippet}
+  </ImageGallery>
 {/if}
+
 
 <div class="min-h-screen bg-[#0D0D0D] py-8 px-4">
 
@@ -66,18 +80,21 @@
     <div class="flex items-center gap-4 min-w-0">
       <div class="w-14 h-14 rounded-full overflow-hidden shrink-0 border border-gray-700
                   bg-gray-800 flex items-center justify-center">
-        {#if promotion.merchantLogo}
-          <img src={logoImage(promotion.merchantLogo)} alt={promotion.merchantName ?? 'Merchant'} class="w-full h-full object-contain" />
+        {#if promotion.businessLogo}
+        <!-- {#if promotion.merchantLogo} -->
+          <img src={logoImage(promotion.businessLogo)} alt={promotion.businessName ?? 'Merchant'} class="w-full h-full object-contain" />
         {:else}
           <span class="text-lg font-black text-gray-500 leading-none select-none">{merchantInitial}</span>
         {/if}
       </div>
       <span class="text-xl font-black text-white truncate leading-tight">
-        {promotion.merchantName ?? 'Comerciante'}
+        <!-- {promotion.merchantName ?? 'Comerciante'} -->
+        {promotion.businessName ?? 'Comerciante'}
       </span>
     </div>
 
-    <!-- Edit button — only rendered when canEdit is true (set server-side) -->
+  <div class="flex items-center gap-2 shrink-0">
+    <LikeButton promotionId={promotion.id} variant="pill" />
     {#if canEdit}
       <a
         href="/merchant/promotions/{promotion.id}/edit"
@@ -88,6 +105,7 @@
         Editar
       </a>
     {/if}
+  </div>
   </div>
 
   <article class="max-w-4xl mx-auto">

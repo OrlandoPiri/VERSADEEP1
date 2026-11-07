@@ -1,0 +1,185 @@
+<script lang="ts">
+  // src/routes/admin/promotions/+page.svelte
+  import { goto, invalidateAll } from '$app/navigation';
+  import PromotionTable from '$lib/components/PromotionTable.svelte';
+  import type { PageData } from './$types';
+
+  let { data }: { data: PageData } = $props();
+
+  let query        = $state(data.query);
+  let statusFilter = $state(data.statusFilter);
+
+  // Toast
+  let toast = $state<{ message: string; type: 'success' | 'error' } | null>(null);
+  let toastTimer: ReturnType<typeof setTimeout>;
+
+  function showFeedback(message: string, type: 'success' | 'error') {
+    clearTimeout(toastTimer);
+    toast = { message, type };
+    toastTimer = setTimeout(() => (toast = null), 3500);
+  }
+
+  // Debounced search → URL update → server reload
+  let debounceTimer: ReturnType<typeof setTimeout>;
+  function onSearchInput() {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => applyFilters(1), 350);
+  }
+
+  function applyFilters(targetPage = 1) {
+    const params = new URLSearchParams();
+    if (query)                  params.set('q',      query);
+    if (statusFilter !== 'all') params.set('status', statusFilter);
+    if (targetPage > 1)         params.set('page',   String(targetPage));
+    const qs = params.toString();
+    return goto(qs ? `?${qs}` : '?', { keepFocus: true });
+  }
+
+  // After a delete: if that was the last row on a later page, step back one
+  // page instead of leaving the admin on an empty one.
+  async function onDeleted() {
+    if (data.promotions.length === 1 && data.page > 1) {
+      await applyFilters(data.page - 1);
+    } else {
+      await invalidateAll();
+    }
+  }
+</script>
+
+<svelte:head>
+  <title>Promoções — Admin — Vercenas</title>
+</svelte:head>
+
+<!-- Toast -->
+{#if toast}
+  <div
+    role="status"
+    aria-live="polite"
+    class="fixed top-6 right-6 z-100 flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-2xl border text-sm font-bold
+      {toast.type === 'success'
+        ? 'bg-[#0D0D0D] border-emerald-500/30 text-emerald-400'
+        : 'bg-[#0D0D0D] border-red-500/30 text-red-400'}"
+  >
+    <span>{toast.type === 'success' ? '✓' : '✕'}</span>
+    {toast.message}
+  </div>
+{/if}
+
+<div class="min-h-screen bg-[#0D0D0D] py-12 px-4">
+  <div class="max-w-6xl mx-auto space-y-8">
+
+    <!-- Header -->
+    <header class="flex flex-col sm:flex-row sm:items-end justify-between gap-6">
+      <div>
+        <p class="text-[10px] font-black uppercase tracking-widest text-gray-600 mb-1">Vercenas</p>
+        <h1 class="text-4xl font-black text-white tracking-tighter">Promoções</h1>
+      </div>
+
+      <!-- Stats (platform-wide, not affected by filters) -->
+      <div class="flex gap-3">
+        <div class="bg-[#1E293B] border border-gray-800 rounded-2xl px-5 py-3 text-right">
+          <p class="text-[10px] font-black uppercase tracking-widest text-gray-500">Total</p>
+          <p class="text-2xl font-black text-white">{data.totalAll}</p>
+        </div>
+        <div class="bg-[#1E293B] border border-gray-800 rounded-2xl px-5 py-3 text-right">
+          <p class="text-[10px] font-black uppercase tracking-widest text-gray-500">Activas</p>
+          <p class="text-2xl font-black text-emerald-400">{data.counts.active}</p>
+        </div>
+        <div class="bg-[#1E293B] border border-gray-800 rounded-2xl px-5 py-3 text-right">
+          <p class="text-[10px] font-black uppercase tracking-widest text-gray-500">Banidas</p>
+          <p class="text-2xl font-black text-red-400">{data.counts.banned}</p>
+        </div>
+      </div>
+    </header>
+
+    <!-- Filters -->
+    <div class="bg-[#1E293B] border border-gray-800 rounded-3xl p-5 flex flex-col sm:flex-row gap-3">
+      <label class="relative flex-1 block">
+        <span class="sr-only">Pesquisar promoções</span>
+        <span class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none text-sm">⌕</span>
+        <input
+          type="search"
+          bind:value={query}
+          oninput={onSearchInput}
+          placeholder="Pesquisar por título, negócio ou proprietário…"
+          class="w-full bg-[#0D0D0D] border border-gray-800 rounded-2xl pl-9 pr-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/50 transition-colors"
+        />
+      </label>
+
+      <div class="flex gap-2 flex-wrap">
+        {#each [['all', 'Todas'], ['active', 'Activas'], ['expired', 'Expiradas'], ['banned', 'Banidas']] as [val, label]}
+          <button
+            onclick={() => { statusFilter = val; applyFilters(1); }}
+            class="px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border
+              {statusFilter === val
+                ? 'bg-orange-500 text-white border-orange-500'
+                : 'bg-[#0D0D0D] text-gray-500 border-gray-800 hover:border-gray-600 hover:text-gray-300'}"
+          >
+            {label}
+          </button>
+        {/each}
+      </div>
+    </div>
+
+    <!-- Table card -->
+    <div class="bg-[#1E293B] border border-gray-800 rounded-3xl overflow-hidden">
+      {#if data.promotions.length === 0}
+        <div class="flex flex-col items-center justify-center py-24 text-center px-4">
+          <p class="text-5xl mb-4">🔍</p>
+          <p class="text-white font-black text-lg mb-1">Nenhuma promoção encontrada</p>
+          <p class="text-gray-500 text-sm">Tente ajustar os filtros ou a pesquisa.</p>
+        </div>
+      {:else}
+        <PromotionTable promotions={data.promotions} onFeedback={showFeedback} {onDeleted} />
+      {/if}
+    </div>
+
+    <!-- Pagination -->
+    {#if data.totalPages > 1}
+      <nav class="flex items-center justify-between" aria-label="Paginação">
+        <p class="text-xs text-gray-600 font-bold">
+          Página <span class="text-white">{data.page}</span> de
+          <span class="text-white">{data.totalPages}</span>
+          &nbsp;·&nbsp;{data.total} promoções
+        </p>
+
+        <div class="flex gap-2 items-center">
+          <button
+            onclick={() => applyFilters(data.page - 1)}
+            disabled={data.page <= 1}
+            class="px-4 py-2.5 rounded-xl border border-gray-800 text-xs font-black text-gray-400
+              hover:text-white hover:border-gray-600 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+          >
+            ← Anterior
+          </button>
+
+          {#each Array.from({ length: data.totalPages }, (_, i) => i + 1) as p}
+            {#if p === 1 || p === data.totalPages || Math.abs(p - data.page) <= 1}
+              <button
+                onclick={() => applyFilters(p)}
+                class="w-9 h-9 rounded-xl text-xs font-black transition-all border
+                  {p === data.page
+                    ? 'bg-orange-500 text-white border-orange-500'
+                    : 'border-gray-800 text-gray-500 hover:text-white hover:border-gray-600'}"
+              >
+                {p}
+              </button>
+            {:else if Math.abs(p - data.page) === 2}
+              <span class="w-9 h-9 flex items-center justify-center text-gray-700 text-xs">…</span>
+            {/if}
+          {/each}
+
+          <button
+            onclick={() => applyFilters(data.page + 1)}
+            disabled={data.page >= data.totalPages}
+            class="px-4 py-2.5 rounded-xl border border-gray-800 text-xs font-black text-gray-400
+              hover:text-white hover:border-gray-600 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+          >
+            Próxima →
+          </button>
+        </div>
+      </nav>
+    {/if}
+
+  </div>
+</div>

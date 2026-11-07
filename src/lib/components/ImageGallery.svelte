@@ -1,15 +1,22 @@
 
 <script lang="ts">
   // src/lib/components/ImageGallery.svelte
-  import { galleryImage } from '$lib/utils/cloudinary';
 
-  interface Props {
-    images: string[];
-    startIndex?: number;
-    onclose: () => void;
-  }
+  import type { Snippet } from 'svelte';
+import { galleryImage } from '$lib/utils/cloudinary';
 
-  let { images, startIndex = 0, onclose }: Props = $props();
+
+
+interface Props {
+  images: string[];
+  startIndex?: number;
+  onclose: () => void; 
+  /** Optional extra controls shown beside the close button (e.g. the like heart). */
+actions?: Snippet;
+}
+let { images, startIndex = 0, onclose, actions }: Props = $props();
+
+
 
   // ✅ Fix: use $state() so startIndex prop change is tracked reactively
   let current   = $state(startIndex);
@@ -90,20 +97,23 @@
     </span>
 
 
-    <button
-      type="button"
-      onclick={onclose}
-      aria-label="Fechar galeria"
-      class="w-9 h-9 flex items-center justify-center rounded-full bg-white/10
-             hover:bg-white/20 text-white transition-colors"
-    >
+    <div class="flex items-center gap-2">
+  {@render actions?.()}
 
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-           stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-        <line x1="18" y1="6" x2="6" y2="18"/>
-        <line x1="6" y1="6" x2="18" y2="18"/>
-      </svg>
-    </button>
+  <button
+    type="button"
+    onclick={onclose}
+    aria-label="Fechar galeria"
+    class="w-9 h-9 flex items-center justify-center rounded-full bg-white/10
+           hover:bg-white/20 text-white transition-colors"
+  >
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+      <line x1="18" y1="6" x2="6" y2="18"/>
+      <line x1="6" y1="6" x2="18" y2="18"/>
+    </svg>
+  </button>
+</div>
   </div>
 
   <!-- ✅ Fix: role="group" satisfies a11y_no_static_element_interactions -->

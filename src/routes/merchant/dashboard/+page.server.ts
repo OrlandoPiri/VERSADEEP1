@@ -6,8 +6,8 @@ import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async (event) => {
   const user = event.locals.user as any; // Bypass user type check
-  if (!user ) {
-    throw error(401, 'Não autorizado');
+  if (!user) {
+    throw error(401, 'Unauthorized, please log in to access your posts');
   }
 
   const [merchant] = await db
@@ -16,7 +16,7 @@ export const load: PageServerLoad = async (event) => {
     .where(eq(merchants.userId, user.id))
     .limit(1);
 
-  if (!merchant) throw error(404, 'Perfil não encontrado');
+  if (!merchant) throw error(404, 'Profile not found');
 
   const rawPromos = await db
     .select({

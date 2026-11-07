@@ -1,8 +1,8 @@
 <script lang="ts">
   const LAST_UPDATED = '17 de Maio de 2026';
   const COMPANY_NAME = 'Vercenas';
-  const CONTACT_EMAIL = 'privacy@vercenas.com';
-  const JURISDICTION = 'República de Moçambique';
+  const CONTACT_EMAIL = 'info@vercenas.com';
+  const JURISDICTION = 'Moçambique';
 </script>
 
 <svelte:head>
@@ -287,7 +287,7 @@
 
     <!-- CTA -->
     <section
-      class="mt-14 rounded-[2rem] bg-gray-900 text-white px-8 py-10 md:px-10"
+      class="mt-14 rounded-4xl bg-gray-900 text-white px-8 py-10 md:px-10"
     >
       <p class="text-xs font-bold uppercase tracking-[0.25em] text-orange-400 mb-4">
         Transparência & Confiança
@@ -323,12 +323,6 @@
       </div>
     </section>
 
-    <!-- Footer -->
-    <footer class="mt-12 pt-8 border-t border-gray-100 text-center">
-      <p class="text-xs text-gray-400">
-        © 2026 {COMPANY_NAME} · {JURISDICTION}
-      </p>
-    </footer>
 
   </article>
 </div>

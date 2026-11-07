@@ -9,17 +9,26 @@
    *
    * Step 1 — Business Identity  (name + logo)
    * Step 2 — Promotion Core     (title, discount, dates)
-   * Step 3 — Media              (images)
+   * Step 3 — Media              (images — delegated to MediaUploader)
    * Step 4 — Optional Details   (description, location, contacts, payments, hours)
    * Step 5 — Review + Submit
    */
-  import { createPromotion, getUploadSignature } from '../../routes/promotions.remote';
+  import {
+  createPromotion,
+  getUploadSignature,
+  getMerchantBusinesses,
+  createBusiness
+} from '../../routes/promotions.remote';
   import { CATEGORIES } from '$lib/utils/categories';
   import { fly, fade } from 'svelte/transition';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
-  import { X, ChevronRight, ChevronLeft, Check, Upload } from 'lucide-svelte';
+  import { ChevronRight, ChevronLeft, Check, Upload } from 'lucide-svelte';
   import { thumbImage, logoImage } from '$lib/utils/cloudinary';
+  import { onMount } from 'svelte';
+  import MediaUploader from '$lib/components/MediaUploader.svelte';
+  import PaymentMethods from '$lib/components/PaymentMethods.svelte';
+  import OpenHours from '$lib/components/OpenHours.svelte';
 
   // ── Steps ──────────────────────────────────────────────────────────────────
   const STEPS = [
@@ -34,9 +43,10 @@
   const TOTAL = STEPS.length;
 
   // ── Upload flags ───────────────────────────────────────────────────────────
-  let logoUploading   = $state(false);
-  let imagesUploading = $state(false);
-  const isUploading   = $derived(logoUploading || imagesUploading);
+  // Note: image-upload state now lives entirely inside MediaUploader.
+  // Only the business-logo upload (a separate concern) is tracked here.
+  let logoUploading = $state(false);
+  const isUploading  = $derived(logoUploading);
 
   // ── Toast / modal ──────────────────────────────────────────────────────────
   let toast = $state<{
@@ -51,8 +61,6 @@
   }
 
   // ── Form data ──────────────────────────────────────────────────────────────
-  let merchantName    = $state('');
-  let merchantLogoUrl = $state('');
   let title               = $state('');
   let discountPercentage  = $state('');
   let startDate           = $state('');
@@ -70,26 +78,68 @@
     friday: '', saturday: '', sunday: '',
   });
   let category=$state('all');
+let businesses = $state<any[]>([]);
+
+let selectedBusinessId = $state('');
+
+let creatingBusiness = $state(false);
+
+let businessName = $state('');
+
+let businessLogoUrl = $state('');
+
+
+const selectedBusiness = $derived(
+  businesses.find(
+    (b) => String(b.id) === selectedBusinessId
+  )
+);
+
+const reviewBusinessName = $derived(
+  selectedBusiness?.name ||
+  businessName ||
+  ''
+);
+
+const reviewBusinessLogo = $derived(
+  selectedBusiness?.logoUrl ||
+  businessLogoUrl ||
+  ''
+);
+
+const reviewBusinessInitial = $derived(
+  reviewBusinessName?.charAt(0)?.toUpperCase() || '?'
+);
 
   // ── Submit effect ──────────────────────────────────────────────────────────
-  $effect(() => {
-    if (!createPromotion.result) return;
-    const role = page.data.user?.role;
-    if (role === 'merchant' || role === 'admin') {
-      showToast('Promoção publicada!');
-      goto('/merchant/dashboard');
-    } else {
-      showToast('Promoção publicada!', 'success', true);
-    }
-  });
+  // $effect(() => {
+  //   if (!createPromotion.result) return;
+  //   const role = page.data.user?.role;
+  //   if (role === 'merchant' || role === 'admin') {
+  //     showToast('Promoção publicada!');
+  //     goto('/merchant/dashboard');
+  //   } else {
+  //     showToast('Promoção publicada!', 'success', true);
+  //   }
+  // });
+
+
+
+onMount(async () => {
+  await loadBusinesses();
+});
+
+async function loadBusinesses() {
+  businesses = await getMerchantBusinesses();
+}
 
   // ── Derived ────────────────────────────────────────────────────────────────
-  const merchantInitial = $derived(merchantName.trim().charAt(0).toUpperCase() || '?');
   const dateError       = $derived(!!(endDate && startDate && endDate <= startDate));
 
   const stepValid = $derived.by(() => {
     switch (currentStep) {
-      case 1: return merchantName.trim().length >= 2;
+      case 1:
+  return !!selectedBusinessId;
       case 2: return title.trim().length >= 3 && !!startDate && !!endDate && !dateError;
       default: return true;
     }
@@ -103,7 +153,8 @@
   function next() { if (stepValid && !isUploading && currentStep < TOTAL) currentStep++; }
   function back() { if (currentStep > 1) currentStep--; }
 
-  // ── Cloudinary upload ──────────────────────────────────────────────────────
+  // ── Cloudinary upload (business logo only — promotion images are handled
+  //    entirely inside MediaUploader) ─────────────────────────────────────────
   async function uploadToCloudinary(file: File, folder: string): Promise<string> {
     const { signature, timestamp, apiKey, cloudName } = await getUploadSignature({ folder });
     const fd = new FormData();
@@ -121,28 +172,38 @@
   async function uploadLogo(files: FileList) {
     if (!files.length) return;
     logoUploading = true;
-    try { merchantLogoUrl = await uploadToCloudinary(files[0], 'promotions'); }
+    try { 
+      businessLogoUrl = await uploadToCloudinary(files[0], 'promotions');
+     }
     catch { showToast('Upload do logotipo falhou.', 'error'); }
     finally { logoUploading = false; }
   }
 
-  async function uploadImages(files: FileList) {
-    if (!files.length) return;
-    imagesUploading = true;
-    try {
-      const urls = await Promise.all(Array.from(files).map((f) => uploadToCloudinary(f, 'promotions')));
-      imageUrls = [...imageUrls, ...urls];
-    } catch { showToast('Upload de imagens falhou.', 'error'); }
-    finally { imagesUploading = false; }
+  async function handleCreateBusiness() {
+  if (!businessName.trim()) return;
+
+  creatingBusiness = true;
+
+  try {
+    const created = await createBusiness({
+      name: businessName,
+      logoUrl: businessLogoUrl
+    });
+
+    await loadBusinesses();
+
+    selectedBusinessId = String(created.id);
+
+    businessName = '';
+
+    businessLogoUrl = '';
+  } catch (e) {
+    console.error(e);
+    showToast('Erro ao criar negócio', 'error');
+  } finally {
+    creatingBusiness = false;
   }
-
-  function removeImage(url: string) { imageUrls = imageUrls.filter((i) => i !== url); }
-
-  function makeCover(url: string) {
-  imageUrls = [url, ...imageUrls.filter((img) => img !== url)];
 }
-
-  const PAYMENT_OPTIONS = ['CASH','M-PESA','E-MOLA','M-KESH','VISA','MASTERCARD','EFT','OTHER'];
 </script>
 
 <!-- ── Upgrade nudge modal (regular users only, post-submit) ──────────────── -->
@@ -213,11 +274,32 @@
       {/each}
     </nav>
 
-    <form {...createPromotion} class="rounded-2xl bg-[#0D0D0D] border border-gray-800 shadow-2xl overflow-hidden">
+
+        <form
+      {...createPromotion.enhance(async ({ submit }) => {
+        try {
+          await submit();
+          if (!createPromotion.result) {
+            showToast('Erro ao publicar promoção.', 'error');
+            return;
+          }
+          const role = page.data.user?.role;
+          if (role === 'merchant' || role === 'admin') {
+            showToast('Promoção publicada!');
+            goto('/merchant/dashboard');
+          } else {
+            showToast('Promoção publicada!', 'success', true);
+          }
+        } catch (err) {
+          console.error(err);
+          showToast('Erro ao publicar promoção.', 'error');
+        }
+      })}
+      class="rounded-2xl bg-[#0D0D0D] border border-gray-800 shadow-2xl overflow-hidden"
+    >
 
       <!-- All hidden inputs always in DOM -->
-      <input type="hidden" name="merchantName"       value={merchantName} />
-      <input type="hidden" name="merchantLogoUrl"    value={merchantLogoUrl} />
+       <input type="hidden" name="businessId" value={selectedBusinessId} />
       <input type="hidden" name="title"              value={title} />
       <input type="hidden" name="description"        value={description} />
       <input type="hidden" name="discountPercentage" value={discountPercentage} />
@@ -234,60 +316,121 @@
       <input type="hidden" name="category"           value={category} />
 
       <!-- ── STEP 1: Business Identity ──────────────────────────────────── -->
-      {#if currentStep === 1}
-        <div class="p-8 space-y-6" transition:fade={{ duration: 120 }}>
-          <header>
-            <h2 class="text-base font-black text-white uppercase tracking-tight">Identidade do Negócio</h2>
-            <p class="text-xs text-gray-500 mt-1">Como aparece nas promoções publicadas</p>
-          </header>
-          <div class="flex items-start gap-5">
-            <div class="relative shrink-0">
-              <div class="w-20 h-20 rounded-full border-2 border-gray-700 bg-[#1E293B] overflow-hidden flex items-center justify-center">
-                {#if logoUploading}
-                  <svg class="animate-spin w-6 h-6 text-[#8B5E3C]" viewBox="0 0 24 24" fill="none">
-                    <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" stroke-dasharray="32" stroke-dashoffset="12"/>
-                  </svg>
-                {:else if merchantLogoUrl}
-                  <img src={logoImage(merchantLogoUrl)} alt="Logotipo" class="w-full h-full object-contain" />
-                {:else}
-                  <span class="text-3xl font-black text-gray-600 select-none leading-none">{merchantInitial}</span>
-                {/if}
-              </div>
-              {#if merchantLogoUrl && !logoUploading}
-                <button type="button" onclick={() => { merchantLogoUrl = ''; }}
-                  class="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-gray-900 border border-gray-700
-                         text-gray-400 hover:text-white flex items-center justify-center transition-colors"
-                  aria-label="Remover logotipo"><X size={11} strokeWidth={3} /></button>
-              {/if}
-            </div>
-            <div class="flex-1 space-y-2.5 pt-1">
-              <label class="block cursor-pointer">
-                <div class="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-dashed
-                            border-gray-700 hover:border-gray-500 hover:bg-white/5 transition-all text-xs text-gray-400 font-medium">
-                  <Upload size={13} />{logoUploading ? 'A carregar…' : 'Carregar logotipo'}
-                </div>
-                <input type="file" accept="image/*" class="sr-only"
-                  onchange={(e) => e.currentTarget.files && uploadLogo(e.currentTarget.files)} />
-              </label>
-              <input type="url" bind:value={merchantLogoUrl} placeholder="Ou cole o URL do logotipo"
-                class="w-full px-3 py-2.5 text-xs rounded-xl bg-[#1E293B] border border-gray-800 text-white
-                       outline-none focus:border-[#8B5E3C] transition-all placeholder:text-gray-600" />
-              <p class="text-[10px] text-gray-600">PNG, JPG ou SVG. Qualquer tamanho.</p>
-            </div>
-          </div>
-          <div class="space-y-1.5">
-            <label for="biz-name" class="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">
-              Nome do Negócio <span class="text-[#8B5E3C]">*</span>
-            </label>
-            <input id="biz-name" type="text" bind:value={merchantName} placeholder="Ex: Restaurante Maputo"
-              class="w-full p-3 rounded-xl bg-[#1E293B] text-white text-sm outline-none border transition-all
-                     {merchantName.length > 0 && merchantName.trim().length < 2
-                       ? 'border-red-500/50' : 'border-transparent focus:border-[#8B5E3C]'}" />
-            {#if merchantName.length > 0 && merchantName.trim().length < 2}
-              <p class="text-[10px] text-red-400 ml-1" transition:fade={{ duration: 100 }}>Mínimo 2 caracteres</p>
-            {/if}
-          </div>
+{#if currentStep === 1}
+       <div class="p-8 space-y-6" transition:fade={{ duration: 120 }}>
+
+  <header>
+    <h2 class="text-base font-black text-white uppercase tracking-tight">
+      Negócio
+    </h2>
+
+    <p class="text-xs text-gray-500 mt-1">
+      Escolha uma loja existente ou crie uma nova
+    </p>
+  </header>
+
+  {#if businesses.length > 0}
+
+    <div class="space-y-2">
+      <label class="block">
+        <span class="text-xs text-gray-400 font-bold uppercase block mb-2">
+          Escolher negócio
+        </span>
+        <select
+          bind:value={selectedBusinessId}
+          class="w-full p-3 rounded-xl bg-[#1E293B] text-white"
+        >
+          <option value="">Selecionar</option>
+
+          {#each businesses as biz}
+            <option value={biz.id}>
+              {biz.name}
+            </option>
+          {/each}
+        </select>
+      </label>
+    </div>
+
+    <div class="border-t border-gray-800 pt-5">
+      <p class="text-[10px] text-gray-600 uppercase font-bold mb-3">
+        Ou criar novo negócio
+      </p>
+    </div>
+
+{/if}
+
+  <div class="space-y-3">
+
+    <input
+      type="text"
+      bind:value={businessName}
+      placeholder="Nome do negócio"
+      class="w-full p-3 rounded-xl bg-[#1E293B] text-white"
+    />
+<div class="space-y-3">
+
+  <label
+    class="block cursor-pointer"
+  >
+    <div
+      class="border-2 border-dashed border-gray-700 rounded-xl p-6 text-center hover:border-[#8B5E3C] transition-all"
+    >
+    
+      <input
+        type="file"
+        accept="image/*"
+        class="hidden"
+        disabled={logoUploading}
+        onchange={(e) =>
+          e.currentTarget.files &&
+          uploadLogo(e.currentTarget.files)}
+      />
+
+      {#if logoUploading}
+        <p class="text-sm text-gray-400">
+          A carregar logotipo...
+        </p>
+
+      {:else if businessLogoUrl}
+        <img
+          src={logoImage(businessLogoUrl)}
+          alt="Logotipo do negócio"
+          class="w-20 h-20 object-contain mx-auto rounded-lg"
+        />
+
+        <p class="text-xs text-emerald-400 mt-2">
+          Logotipo carregado
+        </p>
+
+      {:else}
+        <div class="space-y-2">
+          <Upload
+            size={24}
+            class="mx-auto text-gray-500"
+          />
+
+          <p class="text-sm text-gray-400">
+            Carregar logotipo
+          </p>
         </div>
+      {/if}
+    </div>
+  </label>
+
+</div>
+
+    <button
+      type="button"
+      onclick={handleCreateBusiness}
+      disabled={creatingBusiness}
+      class="w-full bg-[#8B5E3C] text-white py-3 rounded-xl font-bold"
+    >
+      {creatingBusiness ? 'Criando...' : 'Criar negócio'}
+    </button>
+
+  </div>
+
+</div>
 
       <!-- ── STEP 2: Promotion Core ──────────────────────────────────────── -->
       {:else if currentStep === 2}
@@ -296,63 +439,63 @@
             <h2 class="text-base font-black text-white uppercase tracking-tight">A Promoção</h2>
             <p class="text-xs text-gray-500 mt-1">O essencial que os clientes vão ver primeiro</p>
           </header>
+
           <div class="space-y-1.5">
-            <label for="promo-title" class="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">
-              Título <span class="text-[#8B5E3C]">*</span>
+            <label class="block">
+              <span class="text-[10px] text-gray-500 font-bold uppercase tracking-wider block mb-1.5">
+                Título <span class="text-[#8B5E3C]">*</span>
+              </span>
+              <input type="text" bind:value={title} placeholder="Ex: 30% de desconto em toda a ementa"
+                class="w-full p-3 rounded-xl bg-[#1E293B] text-white text-sm outline-none border transition-all
+                       {title.length > 0 && title.trim().length < 3 ? 'border-red-500/50' : 'border-transparent focus:border-[#8B5E3C]'}" />
             </label>
-            <input id="promo-title" type="text" bind:value={title} placeholder="Ex: 30% de desconto em toda a ementa"
-              class="w-full p-3 rounded-xl bg-[#1E293B] text-white text-sm outline-none border transition-all
-                     {title.length > 0 && title.trim().length < 3 ? 'border-red-500/50' : 'border-transparent focus:border-[#8B5E3C]'}" />
             {#if title.length > 0 && title.trim().length < 3}
               <p class="text-[10px] text-red-400 ml-1" transition:fade={{ duration: 100 }}>Mínimo 3 caracteres</p>
             {/if}
           </div>
-          <div class="space-y-1.5">
-            <label for="discount" class="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Desconto %</label>
+
+          <label class="block">
+            <span class="text-[10px] text-gray-500 font-bold uppercase tracking-wider block mb-1.5">Desconto %</span>
             <div class="relative">
-              <input id="discount" type="number" bind:value={discountPercentage} inputmode="numeric" min="1" max="100" placeholder="Ex: 30"
+              <input type="number" bind:value={discountPercentage} inputmode="numeric" min="1" max="100" placeholder="Ex: 30"
                 class="w-full p-3 pr-10 rounded-xl bg-[#1E293B] text-white text-sm outline-none border border-transparent focus:border-[#8B5E3C] transition-all" />
               <span class="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-500 text-sm font-bold pointer-events-none">%</span>
             </div>
-          </div>
-//Category
+          </label>
 
-<div class="space-y-1.5">
-  <label
-    class="text-[10px] text-gray-500 font-bold uppercase tracking-wider block"
-  >
-    Categoria <span class="text-[#8B5E3C]">*</span>
-  </label>
+          <label class="block">
+            <span class="text-[10px] text-gray-500 font-bold uppercase tracking-wider block mb-1.5">
+              Categoria <span class="text-[#8B5E3C]">*</span>
+            </span>
+            <select
+              bind:value={category}
+              class="w-full p-3 rounded-xl bg-[#1E293B] text-white text-sm outline-none border border-transparent focus:border-[#8B5E3C]"
+            >
+              <option value="all">Todas</option>
+              {#each CATEGORIES as cat (cat.slug)}
+                <option value={cat.slug}>
+                  {cat.label}
+                </option>
+              {/each}
+            </select>
+          </label>
 
-  <select
-    bind:value={category}
-    class="w-full p-3 rounded-xl bg-[#1E293B] text-white text-sm outline-none border border-transparent focus:border-[#8B5E3C]"
-  >
-    <option value="all">Todas</option>
-
-    {#each CATEGORIES as cat (cat.slug)}
-      <option value={cat.slug}>
-        {cat.label}
-      </option>
-    {/each}
-  </select>
-</div>
           <div class="grid grid-cols-2 gap-3">
-            <div class="space-y-1.5">
-              <label for="start-date" class="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">
+            <label class="block">
+              <span class="text-[10px] text-gray-500 font-bold uppercase tracking-wider block mb-1.5">
                 Início <span class="text-[#8B5E3C]">*</span>
-              </label>
-              <input id="start-date" type="datetime-local" bind:value={startDate}
+              </span>
+              <input type="datetime-local" bind:value={startDate}
                 class="w-full p-3 rounded-xl bg-[#1E293B] text-white text-xs outline-none border border-transparent focus:border-[#8B5E3C] transition-all" />
-            </div>
-            <div class="space-y-1.5">
-              <label for="end-date" class="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">
+            </label>
+            <label class="block">
+              <span class="text-[10px] text-gray-500 font-bold uppercase tracking-wider block mb-1.5">
                 Fim <span class="text-[#8B5E3C]">*</span>
-              </label>
-              <input id="end-date" type="datetime-local" bind:value={endDate} min={startDate}
+              </span>
+              <input type="datetime-local" bind:value={endDate} min={startDate}
                 class="w-full p-3 rounded-xl bg-[#1E293B] text-white text-xs outline-none border transition-all
                        {dateError ? 'border-red-500/50' : 'border-transparent focus:border-[#8B5E3C]'}" />
-            </div>
+            </label>
           </div>
           {#if dateError}
             <p class="text-[10px] text-red-400 -mt-2" transition:fade={{ duration: 100 }}>A data de fim deve ser depois do início</p>
@@ -371,61 +514,8 @@
               {/if}
             </p>
           </header>
-          <label class="block cursor-pointer">
-            <div class="relative border-2 border-dashed border-gray-800 rounded-2xl p-10 text-center
-                        hover:border-gray-600 hover:bg-white/2 transition-all group">
-              <input type="file" multiple accept="image/*" class="sr-only" disabled={imagesUploading}
-                onchange={(e) => e.currentTarget.files && uploadImages(e.currentTarget.files)} />
-              {#if imagesUploading}
-                <div class="flex flex-col items-center gap-3">
-                  <svg class="animate-spin w-8 h-8 text-[#8B5E3C]" viewBox="0 0 24 24" fill="none">
-                    <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" stroke-dasharray="32" stroke-dashoffset="12"/>
-                  </svg>
-                  <p class="text-xs text-gray-400">A carregar imagens…</p>
-                </div>
-              {:else}
-                <div class="flex flex-col items-center gap-3">
-                  <div class="w-12 h-12 rounded-xl bg-gray-800 group-hover:bg-gray-700 transition-colors flex items-center justify-center">
-                    <Upload size={20} class="text-gray-400" />
-                  </div>
-                  <div>
-                    <p class="text-sm text-gray-300 font-medium">Clique ou arraste imagens</p>
-                    <p class="text-xs text-gray-600 mt-0.5">PNG, JPG, WEBP — múltiplos ficheiros</p>
-                  </div>
-                </div>
-              {/if}
-            </div>
-          </label>
-          {#if imageUrls.length > 0}
-            <div class="grid grid-cols-3 gap-2">
-              {#each imageUrls as url, i (url)}
-                <div class="relative rounded-xl overflow-hidden border border-gray-800 bg-gray-900 group" style="aspect-ratio: 4/3;">
-                  <img src={thumbImage(url)} alt="Imagem {i + 1}" class="w-full h-full object-contain" loading="lazy" />
-                  {#if i === 0}
-                    <span class="absolute top-1.5 left-1.5 bg-[#8B5E3C] text-white text-[9px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-wide pointer-events-none">Capa</span>
-                  {/if}
-                  <button type="button" onclick={() => removeImage(url)}
-                    class="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/70 border border-gray-700
-                           text-gray-300 hover:text-white hover:bg-red-900/80 hover:border-red-500
-                           flex items-center justify-center transition-all opacity-0 group-hover:opacity-100 focus:opacity-100"
-                    aria-label="Remover imagem {i + 1}"><X size={12} strokeWidth={3} /></button>
 
-                    <!-- MAKE COVER IMAGE -->
-                    {#if i !== 0}
-  <button
-    type="button"
-    onclick={() => makeCover(url)}
-    class="absolute bottom-1.5 left-1.5 px-2 py-1 rounded-md bg-black/70 border border-gray-700
-           text-white text-[9px] font-bold uppercase tracking-wide
-           hover:bg-black transition-all opacity-0 group-hover:opacity-100 focus:opacity-100"
-  >
-    Cover
-  </button>
-{/if}
-                </div>
-              {/each}
-            </div>
-          {/if}
+          <MediaUploader bind:imageUrls />
         </div>
 
       <!-- ── STEP 4: Optional Details ───────────────────────────────────── -->
@@ -435,67 +525,52 @@
             <h2 class="text-base font-black text-white uppercase tracking-tight">Detalhes</h2>
             <p class="text-xs text-gray-500 mt-1">Tudo opcional — mais detalhes aumentam conversão</p>
           </header>
-          <div class="space-y-1.5">
-            <label for="desc" class="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Descrição</label>
-            <textarea id="desc" bind:value={description} rows="3" placeholder="Descreva a promoção em detalhe…"
+
+          <label class="block space-y-1.5">
+            <span class="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Descrição</span>
+            <textarea bind:value={description} rows="3" placeholder="Descreva a promoção em detalhe…"
               class="w-full p-3 rounded-xl bg-[#1E293B] text-white text-sm outline-none border border-transparent focus:border-[#8B5E3C] transition-all resize-none"></textarea>
-          </div>
-          <div class="space-y-1.5">
-            <label for="address" class="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Endereço</label>
-            <input id="address" type="text" bind:value={locationAddress} placeholder="Ex: Av. Julius Nyerere, Maputo"
+          </label>
+
+          <label class="block space-y-1.5">
+            <span class="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Endereço</span>
+            <input type="text" bind:value={locationAddress} placeholder="Ex: Av. Julius Nyerere, Maputo"
               class="w-full p-3 rounded-xl bg-[#1E293B] text-white text-sm outline-none border border-transparent focus:border-[#8B5E3C] transition-all" />
-          </div>
+          </label>
+
           <div class="grid grid-cols-3 gap-2">
-            <div class="space-y-1.5">
-              <label for="phone" class="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Tel</label>
-              <input id="phone" type="tel" bind:value={contactPhone} placeholder="+258…"
+            <label class="block space-y-1.5">
+              <span class="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Tel</span>
+              <input type="tel" bind:value={contactPhone} placeholder="+258…"
                 class="w-full p-2.5 rounded-lg bg-[#1E293B] text-white text-xs outline-none border border-transparent focus:border-[#8B5E3C] transition-all" />
-            </div>
-            <div class="space-y-1.5">
-              <label for="whatsapp" class="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">WhatsApp</label>
-              <input id="whatsapp" type="tel" bind:value={contactWhatsapp} placeholder="+258…"
+            </label>
+            <label class="block space-y-1.5">
+              <span class="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">WhatsApp</span>
+              <input type="tel" bind:value={contactWhatsapp} placeholder="+258…"
                 class="w-full p-2.5 rounded-lg bg-[#1E293B] text-white text-xs outline-none border border-transparent focus:border-[#8B5E3C] transition-all" />
-            </div>
-            <div class="space-y-1.5">
-              <label for="email" class="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Email</label>
-              <input id="email" type="email" bind:value={contactEmail} placeholder="email@…"
+            </label>
+            <label class="block space-y-1.5">
+              <span class="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Email</span>
+              <input type="email" bind:value={contactEmail} placeholder="email@…"
                 class="w-full p-2.5 rounded-lg bg-[#1E293B] text-white text-xs outline-none border border-transparent focus:border-[#8B5E3C] transition-all" />
-            </div>
+            </label>
           </div>
+
           <div class="space-y-2">
             <span class="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Formas de Pagamento</span>
-            <div class="grid grid-cols-2 gap-2">
-              {#each PAYMENT_OPTIONS as opt}
-                {@const active = selectedPayments.includes(opt)}
-                <label class="flex items-center gap-2.5 px-3 py-2.5 rounded-xl border cursor-pointer transition-all select-none
-                              {active ? 'bg-[#8B5E3C]/10 border-[#8B5E3C]/50 text-white' : 'bg-[#1E293B]/40 border-gray-800 text-gray-500 hover:border-gray-600'}">
-                  <input type="checkbox" value={opt} bind:group={selectedPayments} class="sr-only" />
-                  <div class="w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors
-                              {active ? 'bg-[#8B5E3C] border-[#8B5E3C]' : 'border-gray-600'}">
-                    {#if active}<Check size={9} strokeWidth={3} class="text-white" />{/if}
-                  </div>
-                  <span class="text-[11px] font-medium">{opt}</span>
-                </label>
-              {/each}
-            </div>
+            <PaymentMethods bind:selected={selectedPayments} />
           </div>
+
           <div class="space-y-2">
             <span class="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Horário</span>
-            <div class="grid grid-cols-2 gap-1.5">
-              {#each Object.keys(openHoursState) as day}
-                <div class="flex items-center gap-2 px-2.5 py-2 bg-[#1E293B]/40 rounded-lg border border-gray-800">
-                  <span class="text-[10px] text-gray-600 w-6 uppercase shrink-0 font-bold">{day.slice(0,3)}</span>
-                  <input type="text" bind:value={openHoursState[day as keyof typeof openHoursState]} placeholder="09:00–18:00"
-                    class="flex-1 bg-transparent text-white text-[11px] outline-none placeholder:text-gray-700" />
-                </div>
-              {/each}
-            </div>
+            <OpenHours bind:hours={openHoursState} />
           </div>
-          <div class="space-y-1.5">
-            <label for="terms" class="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Termos e Condições</label>
-            <textarea id="terms" bind:value={terms} rows="2" placeholder="Opcional"
+
+          <label class="block space-y-1.5">
+            <span class="text-[10px] text-gray-500 font-bold uppercase tracking-wider block">Termos e Condições</span>
+            <textarea bind:value={terms} rows="2" placeholder="Opcional"
               class="w-full p-3 rounded-xl bg-[#1E293B] text-white text-xs outline-none border border-transparent focus:border-[#8B5E3C] transition-all resize-none"></textarea>
-          </div>
+          </label>
         </div>
 
       <!-- ── STEP 5: Review + Submit ─────────────────────────────────────── -->
@@ -523,10 +598,10 @@
             </div>
             <div class="flex items-center gap-2.5 px-3 py-2 border-b border-gray-700/50">
               <div class="w-8 h-8 rounded-full bg-gray-800 border border-gray-700 overflow-hidden flex items-center justify-center shrink-0">
-                {#if merchantLogoUrl}<img src={logoImage(merchantLogoUrl)} alt="" class="w-full h-full object-contain" />
-                {:else}<span class="text-xs font-black text-gray-500 select-none">{merchantInitial}</span>{/if}
+                {#if reviewBusinessLogo}<img src={logoImage(reviewBusinessLogo)} alt="" class="w-full h-full object-contain" />
+                {:else}<span class="text-xs font-black text-gray-500 select-none">{reviewBusinessInitial}</span>{/if}
               </div>
-              <span class="text-xs font-black text-gray-300 truncate">{merchantName || 'Nome do negócio'}</span>
+              <span class="text-xs font-black text-gray-300 truncate">{reviewBusinessName || 'Nome do negócio'}</span>
             </div>
             <div class="px-3 py-2.5">
               <p class="text-sm font-bold text-white truncate">{title || 'Título da promoção'}</p>
@@ -540,8 +615,19 @@
           </div>
           <div class="space-y-0.5">
             {#each [
-              { label: 'Nome do negócio', ok: merchantName.trim().length >= 2, val: merchantName || '—' },
-              { label: 'Logotipo',        ok: !!merchantLogoUrl,                val: merchantLogoUrl ? 'Carregado' : 'Usando inicial' },
+  {
+    label: 'Nome do negócio',
+    ok: reviewBusinessName.trim().length >= 2,
+    val: reviewBusinessName || '—'
+  },
+
+  {
+    label: 'Logotipo',
+    ok: !!reviewBusinessLogo,
+    val: reviewBusinessLogo
+      ? 'Carregado'
+      : 'Usando inicial'
+  },
               { label: 'Título',          ok: title.trim().length >= 3,         val: title || '—' },
               { label: 'Desconto',        ok: !!discountPercentage,             val: discountPercentage ? `${discountPercentage}%` : 'Não definido' },
               { label: 'Imagens',         ok: imageUrls.length > 0,            val: imageUrls.length ? `${imageUrls.length} foto(s)` : 'Sem imagens' },
@@ -590,4 +676,6 @@
     </p>
   </div>
 </div>
+
+
 

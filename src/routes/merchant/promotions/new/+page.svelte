@@ -7,7 +7,7 @@
 $effect(() => {
     // Allow any authenticated user — merchant, admin, and regular users
     if (!page.data.user) {
-      goto('/auth/login');
+      goto('/login');
     }
  //if (!page.data.user || (page.data.user.role !== 'merchant' && page.data.user.role !== 'admin')) {
   //  goto('/auth/login');

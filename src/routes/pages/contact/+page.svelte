@@ -9,7 +9,7 @@
   } from 'lucide-svelte';
 
   const COMPANY_NAME = 'Vercenas';
-  const SUPPORT_EMAIL = 'support@vercenas.com';
+  const SUPPORT_EMAIL = 'info@vercenas.com';
   const BUSINESS_EMAIL = 'business@vercenas.com';
   const RESPONSE_TIME = '24–48 horas';
 </script>
@@ -193,7 +193,7 @@
 
       <!-- CTA -->
       <section
-        class="rounded-[2rem] bg-gray-900 text-white px-8 py-10 md:px-12 md:py-12"
+        class="rounded-4xl bg-gray-900 text-white px-8 py-10 md:px-12 md:py-12"
       >
         <div class="max-w-2xl">
           <p class="text-xs font-bold uppercase tracking-[0.25em] text-orange-400 mb-4">
@@ -233,12 +233,6 @@
 
     </div>
 
-    <!-- Footer -->
-    <footer class="px-8 py-8 md:px-14 border-t border-gray-100 text-center">
-      <p class="text-xs text-gray-400">
-        © 2026 {COMPANY_NAME} · Plataforma de Promoções
-      </p>
-    </footer>
 
   </article>
 </div>

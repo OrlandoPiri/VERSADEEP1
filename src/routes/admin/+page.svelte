@@ -39,7 +39,7 @@
 </script>
 
 <svelte:head>
-  <title>Admin — Versa</title>
+  <title>Admin — Vercenas</title>
 </svelte:head>
 
 <!-- Toast -->
@@ -63,8 +63,8 @@
     <!-- Header -->
     <header class="flex flex-col sm:flex-row sm:items-end justify-between gap-6">
       <div>
-        <p class="text-[10px] font-black uppercase tracking-widest text-gray-600 mb-1">Versa</p>
-        <h1 class="text-4xl font-black text-white tracking-tighter">Admin Dashboard</h1>
+        <p class="text-[10px] font-black uppercase tracking-widest text-gray-600 mb-1">Vercenas</p>
+        <h1 class="text-4xl font-black text-white tracking-tighter">Painel do Admin</h1>
       </div>
 
       <!-- Stats -->

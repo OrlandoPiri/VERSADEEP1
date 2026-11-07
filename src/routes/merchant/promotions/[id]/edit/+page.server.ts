@@ -8,7 +8,7 @@ import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
   const user = locals.user;
-  if (!user) throw redirect(302, '/auth/login');
+  if (!user) throw redirect(302, '/login');
 
   const id = Number(params.id);
   if (isNaN(id)) throw error(400, 'Identificador inválido.');

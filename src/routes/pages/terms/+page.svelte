@@ -267,13 +267,7 @@
 
     </div>
 
-    <!-- Footer -->
-    <footer class="mt-12 pt-8 border-t border-gray-100 text-center">
-      <p class="text-xs text-gray-400">
-        © 2026 {COMPANY_NAME} · {JURISDICTION} ·
-        <a href="/privacy" class="hover:text-orange-600 transition-colors">Política de Privacidade</a>
-      </p>
-    </footer>
+
 
   </article>
 </div>

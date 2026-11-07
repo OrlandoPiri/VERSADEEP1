@@ -6,7 +6,7 @@
   // Use 'any' to stop TypeScript from over-analyzing the Neon data
   let { data } = $props<{ data: any }>();
   
-  const deleteAction = deletePromotion as any;
+  // const deleteAction = deletePromotion as any;
   let deletingId = $state<number | null>(null);
 
   // 1. Logic moved to script to avoid {@const} placement errors
@@ -23,14 +23,32 @@
     return String(paymentInput).split(',').map(s => s.trim()).filter(Boolean);
   }
 
-  async function handleDelete(id: number) {
+  // async function handleDelete(id: number) {
+  //   if (!confirm('Eliminar permanentemente?')) return;
+  //   deletingId = id;
+  //   try {
+  //     // await deleteAction({ id });
+  //     await deletePromotion({ id });
+  //     await invalidateAll();
+  //   } catch (err) {
+  //     alert('Erro ao eliminar.');
+  //   } finally {
+  //     deletingId = null;
+  //   }
+  // }
+    async function handleDelete(id: number) {
     if (!confirm('Eliminar permanentemente?')) return;
     deletingId = id;
     try {
-      await deleteAction({ id });
+      // deletePromotion is a command() — callable directly. (It used to be a
+      // form(), which can't be called like a function; that threw a TypeError
+      // that the catch below turned into a generic alert.)
+      // Ownership/admin permission is enforced server-side in the handler.
+      await deletePromotion({ id });
       await invalidateAll();
-    } catch (err) {
-      alert('Erro ao eliminar.');
+    } catch (err: any) {
+      console.error(err);
+      alert(err?.body?.message ?? err?.message ?? 'Erro ao eliminar.');
     } finally {
       deletingId = null;
     }
@@ -70,7 +88,8 @@
                     <div class="w-12 h-12 rounded-lg bg-gray-900 border border-gray-700 flex items-center justify-center text-xs">🖼️</div>
                   {/if}
                   <div>
-                    <p class="font-bold text-white leading-tight">{promo.title}</p>
+                  <a href="/promotions/{promo.id}" class="font-bold text-white leading-tight hover:underline cursor-pointer">
+                    <p class="font-bold text-white leading-tight">{promo.title}</p></a>
                     <p class="text-[10px] text-gray-500 mt-1 uppercase">Fim: {new Date(promo.endDate).toLocaleDateString()}</p>
                   </div>
                 </div>
@@ -97,7 +116,7 @@
 
               <td class="px-6 py-5 text-right">
                 <div class="flex items-center justify-end gap-4">
-                  <a href="/merchants/promotions/{promo.id}/edit" class="text-[10px] font-bold uppercase text-gray-400 hover:text-white">Editar</a>
+                  <a href="/merchant/promotions/{promo.id}/edit" class="text-[10px] font-bold uppercase text-gray-400 hover:text-white">Editar</a>
                   <button onclick={() => handleDelete(promo.id)} disabled={deletingId === promo.id} class="text-[10px] font-bold uppercase text-red-900 hover:text-red-500 disabled:opacity-30">
                     {deletingId === promo.id ? '...' : 'Eliminar'}
                   </button>

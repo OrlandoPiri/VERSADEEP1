@@ -56,10 +56,12 @@
                 'success'
               );
             } else {
-              onFeedback(
-                (result.type === 'failure' && result.data?.error) || 'Ocorreu um erro.',
-                'error'
-              );
+              const errorMessage =
+                result.type === 'failure' && typeof result.data?.error === 'string'
+                  ? result.data.error
+                  : 'Ocorreu um erro.';
+
+              onFeedback(errorMessage, 'error');
             }
             await update();
           };

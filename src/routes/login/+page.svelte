@@ -89,7 +89,7 @@
   </form>
 
   <p class="mt-8 text-center text-sm font-medium text-gray-500">
-    Não tem conta? <a href={resolve("/auth/signup")} class="font-bold text-orange-600 hover:underline">Registe-se aqui</a>
+    Não tem conta? <a href={resolve("/signup")} class="font-bold text-orange-600 hover:underline">Registe-se aqui</a>
   </p>
 </div>
 

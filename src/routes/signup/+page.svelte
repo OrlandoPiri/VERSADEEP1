@@ -106,7 +106,7 @@ if (error) {
     </button>
   </form>
   <p class="mt-8 text-center text-sm font-medium text-gray-500">
-    Ja tem conta? <a href={resolve("/auth/login")} class="font-bold text-orange-600 hover:underline">Entre aqui</a>
+    Ja tem conta? <a href={resolve("/login")} class="font-bold text-orange-600 hover:underline">Entre aqui</a>
   </p>
 </div>
 

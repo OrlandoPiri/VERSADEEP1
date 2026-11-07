@@ -108,6 +108,32 @@ export const merchants = pgTable('merchant', {
   updatedAt: timestamp('updated_at').notNull().defaultNow()
 });
 
+//newly added after deploy+vercenas.com registration - to be able to add many businesses under one merchant account
+export const businesses = pgTable('businesses', {
+  id: serial('id').primaryKey(),
+
+  merchantId: integer('merchant_id')
+    .notNull()
+    .references(() => merchants.id, { onDelete: 'cascade' }),
+
+  name: text('name').notNull(),
+
+  logoUrl: text('logo_url'),
+
+  address: text('address'),
+
+  phone: text('phone'),
+
+  whatsapp: text('whatsapp'),
+
+  email: text('email'),
+
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+
+  updatedAt: timestamp('updated_at').defaultNow().notNull()
+});
+
+
 export const promotions = pgTable(
   'promotion',
   {
@@ -115,6 +141,13 @@ export const promotions = pgTable(
     merchantId: integer('merchant_id')
       .notNull()
       .references(() => merchants.id, { onDelete: 'cascade' }),
+    
+businessId: integer('business_id')
+  .references(() => businesses.id, {
+    onDelete: 'set null',
+  }),
+
+
 
     // Trust & ranking signals
     verified: boolean('verified').notNull().default(false),
@@ -263,15 +296,29 @@ export const merchantsRelations = relations(merchants, ({ one, many }) => ({
   promotions: many(promotions)
 }));
 
+// export const promotionsRelations = relations(promotions, ({ one, many }) => ({
+//   merchant: one(merchants, {
+//     fields: [promotions.merchantId],
+//     references: [merchants.id]
+//   }),
+//   likes: many(likes),
+//   comments: many(comments)
+// }));
 export const promotionsRelations = relations(promotions, ({ one, many }) => ({
   merchant: one(merchants, {
     fields: [promotions.merchantId],
     references: [merchants.id]
   }),
-  likes: many(likes),
-  comments: many(comments)
-}));
 
+  business: one(businesses, {
+    fields: [promotions.businessId],
+    references: [businesses.id]
+  }),
+
+  likes: many(likes),
+  comments: many(comments),
+  // promotions: many(promotions)
+}));
 // --- VALIBOT SCHEMAS ---
 export const insertUserSchema = createInsertSchema(users);
 export const selectUserSchema = createSelectSchema(users);

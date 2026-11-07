@@ -14,17 +14,18 @@ export const auth = betterAuth({
       user: schema.users,
       session: schema.sessions,
       account: schema.accounts,
-      verification: schema.verifications,
-    },
+      verification: schema.verifications
+    }
   }),
   emailAndPassword: { enabled: true, autoSignIn: true },
   plugins: [phoneNumber()], // Remove svelteKit() from here
   user: {
     additionalFields: {
-      role: { type: 'string', defaultValue: 'user' },
-      phoneNumber: { type: 'string', required: false },
-    },
-  },
+      role: { type: 'string', defaultValue: 'user', input: false },
+      banned: { type: 'boolean', defaultValue: false, input: false },
+      phoneNumber: { type: 'string', required: false }
+    }
+  }
 });
 
 // import { betterAuth } from 'better-auth';
